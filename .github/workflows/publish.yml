@@ -18,21 +18,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: "pnpm"
+          cache: "npm"
           registry-url: "https://registry.npmjs.org"
 
-      - run: pnpm install --frozen-lockfile
+      - run: npm ci
 
       - name: Build
-        run: pnpm build
+        run: npm run build
 
       - name: Typecheck
-        run: pnpm typecheck
+        run: npm run typecheck
 
       - name: Validate version matches tag
         run: |
