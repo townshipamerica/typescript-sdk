@@ -1,0 +1,64 @@
+{
+  "name": "townshipamerica",
+  "version": "1.0.0",
+  "description": "Official TypeScript SDK for the Township America API — convert PLSS legal land descriptions to GPS coordinates and back.",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "township",
+    "america",
+    "plss",
+    "gps",
+    "coordinates",
+    "legal-land-description",
+    "public-land-survey-system",
+    "geocoding",
+    "geospatial",
+    "survey",
+    "land",
+    "section",
+    "township-range",
+    "meridian"
+  ],
+  "author": "Maps & Apps Inc.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/townshipamerica/typescript-sdk.git"
+  },
+  "homepage": "https://townshipamerica.com/api",
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "tsup": "^8.4.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}
