@@ -21,24 +21,41 @@ export interface GeoJSONPolygon {
   coordinates: number[][][];
 }
 
+export interface GeoJSONMultiPolygon {
+  type: "MultiPolygon";
+  coordinates: number[][][][];
+}
+
+export type GeoJSONBoundary = GeoJSONPolygon | GeoJSONMultiPolygon;
+
 // --- Feature Properties ---
 
 export type Unit = "Township" | "First Division" | "Second Division";
+
+export type SurveySystem = "PLSS" | "TXSS";
 
 export interface FeatureProperties {
   shape: "grid" | "centroid";
   search_term: string | number[];
   legal_location: string;
   alternate_legal_location?: string;
-  unit?: Unit;
-  survey_system?: string;
+  unit?: Unit | null;
+  survey_system?: SurveySystem | string;
   county?: string;
   state?: string;
+  /** Texas abstract number (TXSS only). */
+  abstract_no?: string;
+  /** Texas block number (TXSS only). */
+  block_no?: string;
+  /** Texas survey name (TXSS only). */
+  survey_name?: string;
+  /** Reported acreage when available (TXSS only). */
+  acreage?: number;
 }
 
 // --- GeoJSON Features ---
 
-export interface GeoJSONFeature<G = GeoJSONPoint | GeoJSONPolygon> {
+export interface GeoJSONFeature<G = GeoJSONPoint | GeoJSONBoundary> {
   type: "Feature";
   geometry: G;
   properties: FeatureProperties;
@@ -62,14 +79,14 @@ export interface SearchResult {
   state: string | undefined;
   /** County where the land unit is located. */
   county: string | undefined;
-  /** The land unit type (Township, First Division, Second Division). */
-  unit: string | undefined;
-  /** The survey system (PLSS). */
-  surveySystem: string | undefined;
+  /** The land unit type (Township, First Division, Second Division). Null for TXSS. */
+  unit: string | null | undefined;
+  /** The survey system: PLSS or TXSS (Texas). */
+  surveySystem: SurveySystem | string | undefined;
   /** Alternate legal land description if available. */
   alternateLegalLocation: string | undefined;
   /** Grid boundary polygon, or null if no boundary returned. */
-  boundary: GeoJSONPolygon | null;
+  boundary: GeoJSONBoundary | null;
   /** The raw GeoJSON FeatureCollection from the API. */
   raw: GeoJSONFeatureCollection;
 }

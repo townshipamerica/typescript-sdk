@@ -10,8 +10,8 @@ import type {
   AutocompleteOptions,
   BatchReverseOptions,
   BatchSearchOptions,
+  GeoJSONBoundary,
   GeoJSONFeatureCollection,
-  GeoJSONPolygon,
   ReverseOptions,
   SearchResult,
   TownshipClientOptions
@@ -41,7 +41,7 @@ function toSearchResult(fc: GeoJSONFeatureCollection): SearchResult {
     unit: props.unit,
     surveySystem: props.survey_system,
     alternateLegalLocation: props.alternate_legal_location,
-    boundary: grid ? (grid.geometry as GeoJSONPolygon) : null,
+    boundary: grid ? (grid.geometry as GeoJSONBoundary) : null,
     raw: fc
   };
 }
@@ -116,9 +116,9 @@ export class TownshipClient {
   // --- Search ---
 
   /**
-   * Convert a PLSS legal land description to GPS coordinates.
+   * Convert a PLSS or Texas TXSS legal land description to GPS coordinates.
    *
-   * @param legalLocation - e.g. "NW 25 24N 1E 6th Meridian"
+   * @param legalLocation - e.g. "NW 25 24N 1E 6th Meridian" or "A-175 Reeves County"
    * @returns A SearchResult with coordinates, boundary, and metadata.
    * @throws {ValidationError} If the location string is invalid.
    * @throws {NotFoundError} If no match is found.
@@ -137,11 +137,11 @@ export class TownshipClient {
   }
 
   /**
-   * Find the PLSS legal land description at the given GPS coordinates.
+   * Find the legal land description at the given GPS coordinates (PLSS or Texas TXSS).
    *
    * @param longitude - Longitude (x) coordinate.
    * @param latitude - Latitude (y) coordinate.
-   * @param options - Optional unit filter.
+   * @param options - Optional PLSS unit filter (ignored for TXSS results).
    * @returns A SearchResult or array of SearchResults (when unit is 'all').
    */
   async reverse(
@@ -185,7 +185,7 @@ export class TownshipClient {
   // --- Autocomplete ---
 
   /**
-   * Get autocomplete suggestions for a partial PLSS description.
+   * Get autocomplete suggestions for a partial PLSS or Texas TXSS description.
    *
    * @param query - Partial search query (minimum 2 characters).
    * @param options - Optional limit (1–10, default 3) and proximity.
@@ -209,10 +209,10 @@ export class TownshipClient {
   // --- Batch ---
 
   /**
-   * Convert multiple PLSS descriptions to GPS coordinates in one request.
-   * Auto-chunks if more than 100 items.
+   * Convert multiple legal land descriptions to GPS coordinates in one request.
+   * Auto-chunks if more than 100 items. Mix PLSS and Texas TXSS inputs freely.
    *
-   * @param locations - Array of PLSS legal land descriptions.
+   * @param locations - Array of legal land descriptions.
    * @param options - Optional chunk size.
    * @returns Array of SearchResult or null for each input.
    */
@@ -247,11 +247,11 @@ export class TownshipClient {
   }
 
   /**
-   * Find PLSS descriptions for multiple coordinate pairs in one request.
+   * Find legal land descriptions for multiple coordinate pairs in one request.
    * Auto-chunks if more than 100 items.
    *
    * @param coordinates - Array of [longitude, latitude] pairs.
-   * @param options - Optional unit filter and chunk size.
+   * @param options - Optional PLSS unit filter and chunk size.
    * @returns Array of SearchResult or null for each input.
    */
   async batchReverse(
@@ -309,7 +309,7 @@ export class TownshipClient {
    * @param legalLocation - e.g. "NW 25 24N 1E 6th Meridian"
    * @returns The boundary GeoJSON Polygon, or null if not found.
    */
-  async boundary(legalLocation: string): Promise<GeoJSONPolygon | null> {
+  async boundary(legalLocation: string): Promise<GeoJSONBoundary | null> {
     const result = await this.search(legalLocation);
     return result.boundary;
   }

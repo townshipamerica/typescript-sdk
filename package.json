@@ -1,7 +1,7 @@
 {
   "name": "townshipamerica",
-  "version": "1.0.1",
-  "description": "Official TypeScript SDK for the Township America API — convert PLSS legal land descriptions to GPS coordinates and back.",
+  "version": "1.0.2",
+  "description": "Official TypeScript SDK for the Township America API — convert PLSS and Texas TXSS legal land descriptions to GPS coordinates and back.",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",

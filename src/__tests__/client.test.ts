@@ -97,6 +97,76 @@ const AUTOCOMPLETE_RESPONSE: GeoJSONFeatureCollection = {
   ]
 };
 
+const TX_SEARCH_RESPONSE: GeoJSONFeatureCollection = {
+  type: "FeatureCollection",
+  features: [
+    {
+      type: "Feature",
+      geometry: {
+        type: "MultiPolygon",
+        coordinates: [
+          [
+            [
+              [-103.5, 31.2],
+              [-103.4, 31.2],
+              [-103.4, 31.3],
+              [-103.5, 31.3],
+              [-103.5, 31.2]
+            ]
+          ]
+        ]
+      },
+      properties: {
+        shape: "grid",
+        search_term: "A-175 Reeves County",
+        legal_location: "Abstract 175 Reeves County Texas",
+        alternate_legal_location: "A-175 Reeves Co Texas",
+        unit: null,
+        survey_system: "TXSS",
+        county: "Reeves",
+        state: "TX",
+        abstract_no: "175"
+      }
+    },
+    {
+      type: "Feature",
+      geometry: {
+        type: "Point",
+        coordinates: [-103.45, 31.25]
+      },
+      properties: {
+        shape: "centroid",
+        search_term: "A-175 Reeves County",
+        legal_location: "Abstract 175 Reeves County Texas",
+        alternate_legal_location: "A-175 Reeves Co Texas",
+        unit: null,
+        survey_system: "TXSS",
+        county: "Reeves",
+        state: "TX",
+        abstract_no: "175"
+      }
+    }
+  ]
+};
+
+const TX_AUTOCOMPLETE_RESPONSE: GeoJSONFeatureCollection = {
+  type: "FeatureCollection",
+  features: [
+    {
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [-103.45, 31.25] },
+      properties: {
+        shape: "centroid",
+        search_term: "A-175",
+        legal_location: "Abstract 175 Reeves County Texas",
+        survey_system: "TXSS",
+        county: "Reeves",
+        state: "TX"
+      }
+    }
+  ]
+};
+
 function mockFetch(response: unknown, status = 200) {
   return vi.fn().mockResolvedValue({
     ok: status >= 200 && status < 300,
@@ -154,6 +224,19 @@ describe("TownshipClient", () => {
     it("throws NotFoundError when API returns empty object", async () => {
       vi.stubGlobal("fetch", mockFetch({}));
       await expect(client.search("INVALID")).rejects.toThrow(NotFoundError);
+    });
+
+    it("returns TXSS SearchResult with MultiPolygon boundary", async () => {
+      vi.stubGlobal("fetch", mockFetch(TX_SEARCH_RESPONSE));
+
+      const result = await client.search("A-175 Reeves County");
+
+      expect(result.surveySystem).toBe("TXSS");
+      expect(result.state).toBe("TX");
+      expect(result.county).toBe("Reeves");
+      expect(result.unit).toBeNull();
+      expect(result.boundary?.type).toBe("MultiPolygon");
+      expect(result.raw.features[0].properties.abstract_no).toBe("175");
     });
   });
 
@@ -260,6 +343,15 @@ describe("TownshipClient", () => {
       expect(url).toContain("limit=5");
       expect(url).toContain("proximity=-104.07%2C41.04");
     });
+
+    it("returns TXSS autocomplete suggestions", async () => {
+      vi.stubGlobal("fetch", mockFetch(TX_AUTOCOMPLETE_RESPONSE));
+
+      const result = await client.autocomplete("A-175");
+
+      expect(result.features[0].properties.survey_system).toBe("TXSS");
+      expect(result.features[0].properties.state).toBe("TX");
+    });
   });
 
   describe("batchSearch", () => {
@@ -305,6 +397,21 @@ describe("TownshipClient", () => {
       const body2 = JSON.parse(fetchMock.mock.calls[1][1].body);
       expect(body1).toHaveLength(100);
       expect(body2).toHaveLength(50);
+    });
+
+    it("handles mixed PLSS and TXSS batch results", async () => {
+      const batchResponse = [SEARCH_RESPONSE, TX_SEARCH_RESPONSE, null];
+      vi.stubGlobal("fetch", mockFetch(batchResponse));
+
+      const results = await client.batchSearch([
+        "NW 25 24N 1E 6th Meridian",
+        "A-175 Reeves County",
+        "INVALID"
+      ]);
+
+      expect(results[0]?.surveySystem).toBe("PLSS");
+      expect(results[1]?.surveySystem).toBe("TXSS");
+      expect(results[2]).toBeNull();
     });
   });
 

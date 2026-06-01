@@ -3,7 +3,7 @@
 [![npm](https://img.shields.io/npm/v/townshipamerica)](https://www.npmjs.com/package/townshipamerica)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-Official TypeScript SDK for the [Township America API](https://townshipamerica.com/api) — convert US PLSS (Public Land Survey System) legal land descriptions to GPS coordinates and back.
+Official TypeScript SDK for the [Township America API](https://townshipamerica.com/api) — convert US PLSS (Public Land Survey System) and Texas TXSS legal land descriptions to GPS coordinates and back.
 
 [Documentation](https://townshipamerica.com/api) · [GitHub](https://github.com/townshipamerica/typescript-sdk) · [npm](https://www.npmjs.com/package/townshipamerica)
 
@@ -21,23 +21,27 @@ import { TownshipClient } from "townshipamerica";
 const client = new TownshipClient({ apiKey: "YOUR_API_KEY" });
 
 // PLSS to GPS
-const result = await client.search("NW 25 24N 1E 6th Meridian");
-console.log(result.latitude, result.longitude); // 41.077932 -104.01924
-console.log(result.state); // "Colorado"
-console.log(result.county); // "Weld"
+const plss = await client.search("NW 25 24N 1E 6th Meridian");
+console.log(plss.latitude, plss.longitude); // 41.077932 -104.01924
+console.log(plss.surveySystem); // "PLSS"
 
-// GPS to PLSS
+// Texas TXSS to GPS
+const tx = await client.search("A-175 Reeves County");
+console.log(tx.surveySystem); // "TXSS"
+console.log(tx.state); // "TX"
+
+// GPS to legal description (PLSS or TXSS depending on location)
 const reverse = await client.reverse(-104.01924, 41.077932);
-console.log(reverse.legalLocation); // "NW 25 24N 1E 6th Meridian"
+console.log(reverse.legalLocation);
 
-// Autocomplete
-const suggestions = await client.autocomplete("NW 25", { limit: 5 });
+// Autocomplete (PLSS or TXSS)
+const suggestions = await client.autocomplete("A-175", { limit: 5 });
 console.log(suggestions.features[0].properties.legal_location);
 
-// Batch (up to 100 per request, auto-chunks larger arrays)
+// Batch — mix PLSS and TXSS in one call (up to 100 per request, auto-chunks larger arrays)
 const batch = await client.batchSearch([
   "NW 25 24N 1E 6th Meridian",
-  "NE 12 4N 5E Indian Meridian"
+  "A-175 Reeves County"
 ]);
 ```
 
@@ -55,10 +59,11 @@ const batch = await client.batchSearch([
 
 ### `client.search(legalLocation)`
 
-Convert a PLSS legal land description to GPS coordinates.
+Convert a PLSS or Texas TXSS legal land description to GPS coordinates.
 
 ```typescript
-const result = await client.search("NE 12 4N 5E Indian Meridian");
+const plss = await client.search("NE 12 4N 5E Indian Meridian");
+const tx = await client.search("A-175 Reeves County");
 ```
 
 **Returns:** `SearchResult`
@@ -70,17 +75,19 @@ const result = await client.search("NE 12 4N 5E Indian Meridian");
 | `longitude`              | `number`                   | Centroid longitude                                 |
 | `state`                  | `string`                   | US state                                           |
 | `county`                 | `string`                   | County                                             |
-| `unit`                   | `string`                   | `Township`, `First Division`, or `Second Division` |
-| `surveySystem`           | `string`                   | `PLSS`                                             |
+| `unit`                   | `string \| null`           | PLSS unit, or `null` for TXSS                      |
+| `surveySystem`           | `"PLSS" \| "TXSS"`         | Survey system                                      |
 | `alternateLegalLocation` | `string`                   | Alternate description format                       |
-| `boundary`               | `GeoJSONPolygon \| null`   | Grid boundary polygon                              |
+| `boundary`               | `GeoJSONBoundary \| null`  | Grid boundary polygon (Polygon or MultiPolygon)    |
 | `raw`                    | `GeoJSONFeatureCollection` | Raw API response                                   |
+
+TXSS responses also include `abstract_no`, `block_no`, `survey_name`, and `acreage` on feature properties when available.
 
 ---
 
 ### `client.reverse(longitude, latitude, options?)`
 
-Find the PLSS description at GPS coordinates.
+Find the legal land description at GPS coordinates (PLSS or Texas TXSS).
 
 ```typescript
 const result = await client.reverse(-104.01924, 41.077932, {
@@ -100,7 +107,7 @@ const result = await client.reverse(-104.01924, 41.077932, {
 
 ### `client.autocomplete(query, options?)`
 
-Get autocomplete suggestions for a partial PLSS description.
+Get autocomplete suggestions for a partial PLSS or Texas TXSS description.
 
 ```typescript
 const fc = await client.autocomplete("NW 25", { limit: 5 });
@@ -171,7 +178,7 @@ const polygon = await client.boundary("NW 25 24N 1E 6th Meridian");
 // polygon.coordinates === [[[lng, lat], ...]]
 ```
 
-**Returns:** `GeoJSONPolygon | null`
+**Returns:** `GeoJSONPolygon | GeoJSONMultiPolygon | null`
 
 ---
 
@@ -217,7 +224,9 @@ try {
 }
 ```
 
-## PLSS Format Examples
+## Format Examples
+
+### PLSS (30 states)
 
 ```
 NW 25 24N 1E 6th Meridian     → Quarter Section (First Division)
@@ -225,6 +234,15 @@ NW 25 24N 1E 6th Meridian     → Quarter Section (First Division)
 24N 1E 6th Meridian            → Township
 NE 12 4N 5E Indian Meridian   → Named meridian
 7 2N 3E Black Hills Meridian  → Section with named meridian
+```
+
+### Texas TXSS
+
+```
+A-175 Reeves County
+Abstract 175 Reeves County Texas
+Block 25 Section 14 Pecos County
+Survey H&TC, Travis County
 ```
 
 ## License
