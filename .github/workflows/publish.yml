@@ -15,6 +15,9 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
+      # Required for npm trusted publishing (OIDC). Without it npm cannot mint
+      # a provenance statement and falls back to the token below.
+      id-token: write
     steps:
       - uses: actions/checkout@v6
 
@@ -22,7 +25,10 @@ jobs:
         with:
           node-version: "22"
           cache: "npm"
-          registry-url: "https://registry.npmjs.org"
+          # NO registry-url on purpose. setup-node would write an .npmrc with an
+          # empty auth token, and npm treats that as "credentials present" —
+          # which suppresses OIDC entirely and surfaces as a confusing 404 from
+          # the registry. The token path below writes its own .npmrc if needed.
 
       - run: npm ci
 
@@ -31,6 +37,9 @@ jobs:
 
       - name: Typecheck
         run: npm run typecheck
+
+      - name: Test
+        run: npm test
 
       - name: Validate version matches tag
         run: |
@@ -42,7 +51,34 @@ jobs:
           fi
           echo "Publishing townshipamerica@$PKG_VERSION"
 
-      - name: Publish to npm
+      # Node 22 ships npm 10; trusted publishing needs >= 11.5.1.
+      - name: Upgrade npm for trusted publishing
+        run: npm install -g npm@latest
+
+      # Prefers trusted publishing (OIDC): no secret, and npm attaches a signed
+      # provenance statement — look for "Signed provenance statement ... from
+      # GitHub Actions" in the log.
+      #
+      # Falls back to the NPM_TOKEN secret when the trust connection has not
+      # been set up yet, so a release is never blocked on it. To switch fully to
+      # OIDC, configure the package's trusted publisher on npmjs.com (web form
+      # only: tick "Allow npm publish", leave Environment BLANK), verify with
+      # `npm trust list townshipamerica`, then delete the fallback step and the
+      # NPM_TOKEN secret.
+      - name: Publish to npm (trusted publishing)
+        id: oidc_publish
+        continue-on-error: true
         run: npm publish
+
+      - name: Publish to npm (token fallback)
+        if: steps.oidc_publish.outcome == 'failure'
+        run: |
+          if [ -z "${NODE_AUTH_TOKEN}" ]; then
+            echo "Trusted publishing failed and no NPM_TOKEN is configured." >&2
+            exit 1
+          fi
+          echo "Trusted publishing did not succeed; falling back to token auth."
+          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > ~/.npmrc
+          npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
