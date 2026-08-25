@@ -10,10 +10,19 @@ import type {
   AutocompleteOptions,
   BatchReverseOptions,
   BatchSearchOptions,
+  EnergyReport,
+  EnergyReportOptions,
+  FederalLandReport,
+  FederalLandReportOptions,
   GeoJSONBoundary,
   GeoJSONFeatureCollection,
   ReverseOptions,
   SearchResult,
+  TexasProduction,
+  TexasProductionOptions,
+  TexasReport,
+  TexasReportOptions,
+  TexasWell,
   TownshipClientOptions
 } from "./types.js";
 
@@ -73,7 +82,7 @@ export class TownshipClient {
         ...init,
         headers: {
           "X-API-Key": this.apiKey,
-          "User-Agent": "townshipamerica-js/1.0.0",
+          "User-Agent": "townshipamerica-js/2.0.0",
           ...(init?.headers ?? {})
         },
         signal: controller.signal
@@ -97,20 +106,33 @@ export class TownshipClient {
 
   private async handleError(response: Response): Promise<never> {
     let message: string;
+    let code: string | null = null;
     try {
-      const body = (await response.json()) as Record<string, unknown>;
-      message = (body.error ?? body.message ?? response.statusText) as string;
+      const body = (await response.json()) as {
+        error?: { code?: string; message?: string } | string;
+        message?: string;
+      };
+      // Energy/Federal Land/Texas v1 error bodies are {"error": {"code", "message"}}
+      if (body.error && typeof body.error === "object") {
+        message = body.error.message ?? response.statusText;
+        code = body.error.code ?? null;
+      } else {
+        message =
+          (typeof body.error === "string" ? body.error : undefined) ??
+          body.message ??
+          response.statusText;
+      }
     } catch {
       message = response.statusText;
     }
 
     const status = response.status;
-    if (status === 400) throw new ValidationError(message);
-    if (status === 401) throw new AuthenticationError(message);
-    if (status === 404) throw new NotFoundError(message);
-    if (status === 413) throw new PayloadTooLargeError(message);
-    if (status === 429) throw new RateLimitError(message);
-    throw new TownshipError(message, status);
+    if (status === 400) throw new ValidationError(message, code);
+    if (status === 401) throw new AuthenticationError(message, code);
+    if (status === 404) throw new NotFoundError(message, code);
+    if (status === 413) throw new PayloadTooLargeError(message, code);
+    if (status === 429) throw new RateLimitError(message, code);
+    throw new TownshipError(message, status, code);
   }
 
   // --- Search ---
@@ -331,5 +353,147 @@ export class TownshipClient {
     }
 
     return data as GeoJSONFeatureCollection;
+  }
+
+  // --- Energy API ---
+
+  /**
+   * Get the energy parcel report for a PLSS section. Covers state-regulator
+   * wells, operators, federal leases, county royalties, orphaned wells,
+   * pipelines, FracFocus disclosures, and development constraints.
+   *
+   * @param legalLocation - A PLSS legal description, e.g. "NW 25 24N 1E 6th Meridian"
+   * @param options - Optional section projection (`include`)
+   * @returns The energy report
+   *
+   * @example
+   * ```ts
+   * const report = await client.energyReport('25 24N 1E 6th Meridian')
+   * console.log(report.summary.wells_in_section)
+   * console.log(report.wells?.in_section.rows[0]?.api_number)
+   *
+   * // Only the sections you need — the rest are never queried
+   * const slim = await client.energyReport('25 24N 1E 6th Meridian', {
+   *   include: ['wells', 'pipelines']
+   * })
+   * ```
+   */
+  async energyReport(legalLocation: string, options?: EnergyReportOptions): Promise<EnergyReport> {
+    const params = new URLSearchParams({ legal_location: legalLocation });
+    if (options?.include?.length) params.set("include", options.include.join(","));
+    return this.request<EnergyReport>(`/energy/report?${params}`);
+  }
+
+  // --- Federal Land API ---
+
+  /**
+   * Get the federal-land parcel report for a PLSS tract. Covers surface
+   * management, BLM leases and rights-of-way, flood zones, mining claims,
+   * wetlands, firesheds, soils, crop history, orphaned wells, critical
+   * habitat, public access, wildfire risk, and elevation.
+   *
+   * @param legalLocation - A PLSS legal description, e.g. "NW 25 24N 1E 6th Meridian"
+   * @param options - Optional section projection (`include`)
+   * @returns The federal-land report
+   *
+   * @example
+   * ```ts
+   * const report = await client.federalLandReport('NW 25 24N 1E 6th Meridian')
+   * console.log(report.surface_management?.rows[0]?.agency)
+   *
+   * // Only the sections you need — the pruned layers' queries never run
+   * const slim = await client.federalLandReport('NW 25 24N 1E 6th Meridian', {
+   *   include: ['og_leases', 'flood_zones']
+   * })
+   * ```
+   */
+  async federalLandReport(
+    legalLocation: string,
+    options?: FederalLandReportOptions
+  ): Promise<FederalLandReport> {
+    const params = new URLSearchParams({ legal_location: legalLocation });
+    if (options?.include?.length) params.set("include", options.include.join(","));
+    return this.request<FederalLandReport>(`/federal-land/report?${params}`);
+  }
+
+  // --- Texas API ---
+
+  /**
+   * Get the Texas abstract report for a TXSS legal description. Covers GLO
+   * state leases and units, PSF lands, RRC wells and pipelines, pending
+   * permits, coastal erosion, federal overlays, and RRC lease production.
+   *
+   * @param legalLocation - A Texas legal description, e.g. "A-175 Reeves County"
+   * @param options - Optional section projection (`include`)
+   * @returns The Texas report
+   *
+   * @example
+   * ```ts
+   * const report = await client.texasReport('A-175 Reeves County')
+   * console.log(report.active_wells?.rows[0]?.api_number)
+   * console.log(report.production?.summary.total_cum_boe)
+   *
+   * // Only the sections you need — the rest are never queried
+   * const slim = await client.texasReport('A-175 Reeves County', {
+   *   include: ['state_leases', 'production']
+   * })
+   * ```
+   */
+  async texasReport(legalLocation: string, options?: TexasReportOptions): Promise<TexasReport> {
+    const params = new URLSearchParams({ legal_location: legalLocation });
+    if (options?.include?.length) params.set("include", options.include.join(","));
+    return this.request<TexasReport>(`/texas/report?${params}`);
+  }
+
+  /**
+   * Get RRC lease production for a Texas abstract — per-lease lifetime
+   * totals, trailing-12-month volumes, and the 60-month monthly series.
+   * Production is reported by RRC at the LEASE level: rows are the leases
+   * whose wells fall on the abstract, never sub-allocated to the tract.
+   *
+   * @param options - Either `{legalLocation}` or `{countyFips, abstractNo, blockNo?}`
+   * @returns The abstract production rollup
+   *
+   * @example
+   * ```ts
+   * const byLocation = await client.texasProduction({ legalLocation: 'A-175 Reeves County' })
+   * const byKeys = await client.texasProduction({ countyFips: '48389', abstractNo: '175' })
+   * console.log(byKeys.summary.total_cum_boe)
+   * ```
+   */
+  async texasProduction(options: TexasProductionOptions): Promise<TexasProduction> {
+    const params = new URLSearchParams();
+    if (options.legalLocation != null) {
+      params.set("legal_location", options.legalLocation);
+    } else if (options.countyFips != null && options.abstractNo != null) {
+      params.set("county_fips", options.countyFips);
+      params.set("abstract_no", options.abstractNo);
+      if (options.blockNo != null) params.set("block_no", options.blockNo);
+    } else {
+      throw new TownshipError(
+        "texasProduction requires either legalLocation or countyFips + abstractNo"
+      );
+    }
+    return this.request<TexasProduction>(`/texas/production?${params}`);
+  }
+
+  /**
+   * Get per-well allocated production for a Texas well by API number —
+   * summary scalars for every lease edge, the monthly series (when
+   * provisioned), and an Arps decline fit. Volumes are allocated estimates:
+   * RRC reports production by lease, never by well.
+   *
+   * @param api - API-8 or API-14 number (e.g. "42-389-32345" or "42389323450000")
+   * @returns The well's units, series, and decline analysis
+   *
+   * @example
+   * ```ts
+   * const well = await client.texasWell('42-389-32345')
+   * console.log(well.units[0]?.cum_boe)
+   * console.log(well.decline.available && well.decline.value?.di)
+   * ```
+   */
+  async texasWell(api: string): Promise<TexasWell> {
+    return this.request<TexasWell>(`/texas/wells/${encodeURIComponent(api)}`);
   }
 }

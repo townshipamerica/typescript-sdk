@@ -194,6 +194,131 @@ const fc = await client.raw("NW 25 24N 1E 6th Meridian");
 
 ---
 
+### `client.energyReport(legalLocation, options?)`
+
+Energy parcel report for a PLSS section — state-regulator wells, operators,
+BLM federal leases, ONRR county royalties, orphaned wells, pipelines,
+FracFocus disclosures, and development constraints.
+
+```typescript
+const report = await client.energyReport("25 24N 1E 6th Meridian");
+console.log(report.summary.wells_in_section);
+console.log(report.wells?.in_section.rows[0]?.api_number);
+
+// Only the sections you need — the rest are never queried
+const slim = await client.energyReport("25 24N 1E 6th Meridian", {
+  include: ["wells", "pipelines"]
+});
+
+// Attach the parcel boundary under parcel.geometry
+const withGeometry = await client.energyReport("25 24N 1E 6th Meridian", {
+  include: ["geometry"]
+});
+```
+
+**Options:** `include` — any of `wells`, `operators`, `leases`, `royalties`,
+`orphaned_wells`, `pipelines`, `fracfocus`, `constraints`, `geometry`.
+
+**Returns:** `EnergyReport`. Array sections are
+`{total, returned, truncated, more, rows}` envelopes; a failed section lands
+in `meta.unavailable` instead of failing the report.
+
+---
+
+### `client.federalLandReport(legalLocation, options?)`
+
+Federal-land parcel report for a PLSS tract — surface management, BLM O&G and
+geothermal leases, rights-of-way, flood zones, mining claims, wetlands,
+firesheds, soils, crop history, orphaned wells, critical habitat, public
+access, wildfire risk, and elevation.
+
+```typescript
+const report = await client.federalLandReport("NW 25 24N 1E 6th Meridian");
+console.log(report.surface_management?.rows[0]?.agency);
+
+const slim = await client.federalLandReport("NW 25 24N 1E 6th Meridian", {
+  include: ["og_leases", "flood_zones"]
+});
+```
+
+**Options:** `include` — any of `surface_management`, `og_leases`,
+`geothermal_leases`, `rights_of_way`, `flood_zones`, `mining_claims`,
+`wetlands`, `fireshed`, `soils`, `crop_history`, `orphaned_wells`,
+`critical_habitat`, `public_access`, `wildfire_risk_communities`,
+`elevation`, `geometry`.
+
+**Returns:** `FederalLandReport`. `report_scope` is `"containing_section"`
+when the tract is finer than the stored grid (the section is named by
+`report_section`); a layer the state has no data for is listed in
+`meta.unavailable` with reason `no_state_coverage`.
+
+---
+
+### `client.texasReport(legalLocation, options?)`
+
+Texas abstract report for a TXSS legal description — GLO state leases and
+pooled units, PSF lands, state-agency lands, upland leases, RRC wells and T-4
+pipelines, pending permits, coastal erosion, federal overlays (flood zones,
+wetlands, firesheds, soils, orphaned wells, critical habitat, wildfire risk),
+elevation, and RRC lease production.
+
+```typescript
+const report = await client.texasReport("A-175 Reeves County");
+console.log(report.active_wells?.rows[0]?.api_number);
+console.log(report.production?.summary.total_cum_boe);
+
+const slim = await client.texasReport("A-175 Reeves County", {
+  include: ["state_leases", "production"]
+});
+```
+
+**Options:** `include` — any of `state_leases`, `state_units`, `psf_lands`,
+`state_agency_lands`, `upland_leases`, `active_wells`, `pipelines`,
+`pending_permits`, `coastal_erosion`, `flood_zones`, `wetlands`, `fireshed`,
+`soils`, `orphaned_wells`, `critical_habitat`, `wildfire_risk_communities`,
+`elevation`, `production`, `geometry`.
+
+**Returns:** `TexasReport`
+
+---
+
+### `client.texasProduction(options)`
+
+RRC lease production for a Texas abstract — per-lease lifetime totals,
+trailing-12-month volumes, and the 60-month monthly series. Key by a legal
+description OR the registry ids.
+
+```typescript
+const byLocation = await client.texasProduction({ legalLocation: "A-175 Reeves County" });
+const byKeys = await client.texasProduction({ countyFips: "48389", abstractNo: "175" });
+console.log(byKeys.summary.total_cum_boe);
+```
+
+**Options:** `{ legalLocation }` or `{ countyFips, abstractNo, blockNo? }`
+
+**Returns:** `TexasProduction`. Production is reported by RRC at the lease
+level — rows are the leases whose wells fall on the abstract, never
+sub-allocated to the tract.
+
+---
+
+### `client.texasWell(api)`
+
+Per-well allocated production for a Texas well by API number (API-8 or
+API-14) — summary scalars for every lease edge, the monthly series (when
+provisioned), and an Arps decline fit.
+
+```typescript
+const well = await client.texasWell("42-389-32345");
+console.log(well.units[0]?.cum_boe);
+if (well.decline.available) console.log(well.decline.value?.di);
+```
+
+**Returns:** `TexasWell`. Volumes are allocated estimates — RRC reports
+production by lease, never by well.
+
+---
+
 ## Error Handling
 
 All errors extend `TownshipError`:
@@ -223,6 +348,40 @@ try {
   }
 }
 ```
+
+Errors from the Energy, Federal Land, and Texas APIs also carry a
+machine-readable `code` (e.g. `invalid_parameter`, `plss_not_supported`,
+`ambiguous_location`, `not_found`, `rate_limit_exceeded`); it is `null` for
+endpoints that do not send one:
+
+```typescript
+try {
+  await client.texasReport("NW 25 24N 1E 6th Meridian");
+} catch (error) {
+  if (error instanceof ValidationError && error.code === "plss_not_supported") {
+    // Use federalLandReport or energyReport for PLSS descriptions
+  }
+}
+```
+
+## What's new in v2.0.0
+
+v2.0.0 adds the parcel-report APIs:
+
+- `client.energyReport(legalLocation, { include? })` — Energy API report
+- `client.federalLandReport(legalLocation, { include? })` — Federal Land API report
+- `client.texasReport(legalLocation, { include? })` — Texas abstract report
+- `client.texasProduction({ legalLocation } | { countyFips, abstractNo, blockNo? })` — RRC lease production
+- `client.texasWell(api)` — per-well allocated production + Arps decline fit
+
+Breaking changes:
+
+- Error classes gained a third constructor parameter and a readonly `code`
+  property (`string | null`). If you subclass or construct SDK errors
+  directly, update the constructor calls; `instanceof` checks are unaffected.
+- Error bodies of the form `{"error": {"code", "message"}}` (Energy, Federal
+  Land, and Texas APIs) are now parsed into `error.message`/`error.code`.
+  Legacy `{"error": "..."}` / `{"message": "..."}` bodies parse as before.
 
 ## Format Examples
 
