@@ -6,3 +6,6 @@ dist/
 .env
 .env.local
 coverage/
+
+# Editor plugin session state. Machine and session scoped, never shared.
+.omc/
