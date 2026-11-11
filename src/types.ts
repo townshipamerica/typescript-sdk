@@ -190,6 +190,7 @@ export type EnergyReportSection =
   | "pipelines"
   | "fracfocus"
   | "constraints"
+  | "renewables"
   | "geometry";
 
 /** Options for `energyReport`. */
@@ -345,6 +346,326 @@ export interface EnergyConstraints {
   [key: string]: unknown;
 }
 
+// --- Energy API: renewables section ---
+
+/** Nearest ORNL/HIFLD transmission line of one voltage class. */
+export interface EnergyTransmissionLine {
+  /** "100-161", "220-287", "345", "500", "735 AND ABOVE", or "DC" */
+  volt_class: string | null;
+  voltage_kv: number | null;
+  owner: EntityRef | null;
+  status: string | null;
+  distance_miles: number | null;
+  /** True when the line runs through the section (distance under 1 m). */
+  crosses_section: boolean;
+  [key: string]: unknown;
+}
+
+/**
+ * A substation inferred from ORNL/HIFLD transmission-line endpoints. No open
+ * federal substation layer exists, so every row is inferred (`inferred: true`).
+ */
+export interface EnergyInferredSubstation {
+  name: string | null;
+  max_voltage_kv: number | null;
+  max_volt_class: string | null;
+  line_count: number;
+  distance_miles: number | null;
+  inferred: true;
+  [key: string]: unknown;
+}
+
+/** Grid proximity: nearest line per kV class + inferred substations. */
+export interface EnergyRenewablesGrid {
+  radius_mi: number;
+  /** Nearest line per voltage class within `radius_mi`, ordered by class. */
+  transmission_by_class: EnergyTransmissionLine[];
+  /** Nearest AC line of 100 kV or more (DC lines excluded). */
+  nearest_line_100kv_plus: EnergyTransmissionLine | null;
+  /** Up to five nearest inferred substations. */
+  substations: EnergyInferredSubstation[];
+  nearest_substation_230kv_plus: EnergyInferredSubstation | null;
+  nearest_substation_345kv_plus: EnergyInferredSubstation | null;
+  [key: string]: unknown;
+}
+
+/** Generator group an EIA-860M energy source rolls up to. */
+export type EnergyGeneratorGroup =
+  | "solar"
+  | "wind"
+  | "storage"
+  | "hydro"
+  | "geothermal"
+  | "gas"
+  | "nuclear"
+  | "coal"
+  | "other"
+  | (string & {});
+
+/** Operating vs planned nameplate MW for one generator group. */
+export interface EnergyGeneratorTotals {
+  operating: number;
+  planned: number;
+  [key: string]: unknown;
+}
+
+/** One EIA-860M plant (operating or planned) near the section. */
+export interface EnergyPlant {
+  eia_plant_id: number;
+  name: string | null;
+  operator: EntityRef | null;
+  inventory: "operating" | "planned" | (string & {});
+  /** The group holding the plant's largest share of capacity. */
+  group: EnergyGeneratorGroup;
+  technologies: string[];
+  capacity_mw: number;
+  capacity_mw_by_group: Partial<Record<EnergyGeneratorGroup, number>>;
+  online_year: number | null;
+  status: string | null;
+  distance_miles: number | null;
+  [key: string]: unknown;
+}
+
+/** One USGS/LBNL USPVDB solar-array footprint. */
+export interface EnergyPvFootprint {
+  uspvdb_case_id: number | null;
+  eia_plant_id: number | null;
+  name: string | null;
+  capacity_ac_mw: number | null;
+  online_year: number | null;
+  on_section: boolean;
+  distance_miles: number | null;
+  [key: string]: unknown;
+}
+
+/** USGS wind-turbine (USWTDB) counts near the section. */
+export interface EnergyWindTurbines {
+  within_2mi: number;
+  within_5mi: number;
+  projects_within_5mi: string[];
+  [key: string]: unknown;
+}
+
+/** Existing + planned generators, solar footprints, and turbines. */
+export interface EnergyRenewablesProjects {
+  radius_mi: number;
+  totals_mw: Partial<Record<EnergyGeneratorGroup, EnergyGeneratorTotals>>;
+  /** Up to 40 nearest plants. */
+  plants: EnergyPlant[];
+  pv_footprints: EnergyPvFootprint[];
+  wind_turbines: EnergyWindTurbines;
+  [key: string]: unknown;
+}
+
+/**
+ * NREL 2024 supply-curve cell nearest the section, one per technology.
+ * Values describe the surrounding 11.5 km cell, not the section itself.
+ * NREL values are CC-BY 4.0.
+ */
+export interface EnergyNrelCell {
+  technology: "solar" | "wind" | (string & {});
+  sc_point_gid: number | null;
+  resource: number | null;
+  /** "kWh/m2/day (GHI)" for solar, "m/s (115 m hub height)" for wind */
+  resource_unit: string;
+  capacity_factor_pct: number | null;
+  lcoe_all_in_usd_per_mwh: number | null;
+  lcoe_site_usd_per_mwh: number | null;
+  /** National percentile of all-in LCOE within the technology (0 = cheapest). */
+  lcoe_percentile: number | null;
+  capacity_ac_mw: number | null;
+  dist_spur_miles: number | null;
+  dist_reinforcement_miles: number | null;
+  cell_distance_miles: number | null;
+  [key: string]: unknown;
+}
+
+/** One WAFWA CHAT habitat category overlapping the section. */
+export interface EnergyLpcCategory {
+  chat_category: number;
+  label: string | null;
+  overlap_acres: number | null;
+  [key: string]: unknown;
+}
+
+/**
+ * Lesser prairie-chicken range-wide plan habitat (WAFWA CHAT). Not ESA
+ * critical habitat.
+ */
+export interface EnergyLesserPrairieChicken {
+  in_occupied_range: boolean;
+  ecoregion: string | null;
+  /** Lowest (highest-priority) CHAT category on the section. */
+  top_category: number | null;
+  categories: EnergyLpcCategory[];
+  status_note: string;
+  [key: string]: unknown;
+}
+
+/** An airspace floor or ceiling. */
+export interface EnergyAltitude {
+  /** Feet; null when the source unit is not feet. */
+  value_ft: number | null;
+  /** "SFC", "AGL", "MSL", or the raw source code */
+  reference: string | null;
+  label: string;
+  [key: string]: unknown;
+}
+
+/** One FAA military training route near the section. */
+export interface EnergyMilitaryTrainingRoute {
+  ident: string | null;
+  floor: EnergyAltitude | null;
+  ceiling: EnergyAltitude | null;
+  inside_corridor: boolean;
+  centerline_distance_miles: number | null;
+  [key: string]: unknown;
+}
+
+/** One FAA special use airspace overlapping the section. */
+export interface EnergySpecialUseAirspace {
+  name: string | null;
+  type_code: string | null;
+  floor: EnergyAltitude | null;
+  ceiling: EnergyAltitude | null;
+  times_of_use: string | null;
+  controlling_agency: string | null;
+  [key: string]: unknown;
+}
+
+/** FAA military training routes + special use airspace. */
+export interface EnergyRenewablesAviation {
+  military_training_routes: EnergyMilitaryTrainingRoute[];
+  special_use_airspace: EnergySpecialUseAirspace[];
+  [key: string]: unknown;
+}
+
+/** One BLM Solar Energy Zone the section sits in. */
+export interface EnergySolarEnergyZone {
+  name: string | null;
+  status: string | null;
+  state_office: string | null;
+  [key: string]: unknown;
+}
+
+/** One BLM Section 368 energy corridor near the section. */
+export interface EnergySection368Corridor {
+  name: string | null;
+  status: string | null;
+  width_feet: number | null;
+  distance_miles: number | null;
+  [key: string]: unknown;
+}
+
+/** One BLM solar/wind right-of-way case near the section. */
+export interface EnergyRenewableRowCase {
+  serial_number: string | null;
+  case_type: string | null;
+  status: string | null;
+  holder: EntityRef | null;
+  acres: number | null;
+  on_section: boolean;
+  [key: string]: unknown;
+}
+
+/** BLM Solar Energy Zones, Section 368 corridors, and renewable ROW cases. */
+export interface EnergyRenewablesBlm {
+  solar_energy_zones: EnergySolarEnergyZone[];
+  section_368_corridors: EnergySection368Corridor[];
+  renewable_row_cases: EnergyRenewableRowCase[];
+  [key: string]: unknown;
+}
+
+/** Group an FAA Digital Obstacle File obstacle type rolls up to. */
+export type EnergyObstacleGroup =
+  | "wind_turbine"
+  | "met_tower"
+  | "transmission_tower"
+  | "tower"
+  | "stack"
+  | "other"
+  | (string & {});
+
+/** The tallest obstacle within the obstacle radius. */
+export interface EnergyTallestObstacle {
+  type: string | null;
+  agl_ft: number | null;
+  distance_miles: number | null;
+  faa_study: string | null;
+  [key: string]: unknown;
+}
+
+/** FAA Digital Obstacle File summary near the section. */
+export interface EnergyObstacles {
+  radius_mi: number;
+  total: number;
+  at_least_200ft_agl: number;
+  on_section: number;
+  by_group: Partial<Record<EnergyObstacleGroup, number>>;
+  tallest: EnergyTallestObstacle | null;
+  /** Nearest meteorological tower within 10 miles. */
+  nearest_met_tower_miles: number | null;
+  [key: string]: unknown;
+}
+
+/** USGS whooping crane migration corridor. */
+export interface EnergyWhoopingCrane {
+  /** Narrowest corridor band (percent) the section falls in; null when outside. */
+  band_pct: number | null;
+  note: string;
+  [key: string]: unknown;
+}
+
+/** One active LBNL Queued Up interconnection request in the county. */
+export interface EnergyQueueProject {
+  name: string | null;
+  type: string | null;
+  mw: number | null;
+  point_of_interconnection: string | null;
+  ia_phase: string | null;
+  proposed_year: number | null;
+  developer: EntityRef | null;
+  transmission_provider: string | null;
+  [key: string]: unknown;
+}
+
+/**
+ * LBNL Queued Up interconnection queue, county-wide (never parcel-precise).
+ * LBNL values are CC-BY 4.0.
+ */
+export interface EnergyInterconnectionQueue {
+  scope: "county" | (string & {});
+  county: string;
+  state_code: string;
+  vintage: string | null;
+  active_requests: number;
+  active_mw_by_type: Record<string, number>;
+  withdrawn_requests: number;
+  operational_requests: number;
+  /** Up to 10 largest active requests. */
+  active_projects: EnergyQueueProject[];
+  [key: string]: unknown;
+}
+
+/**
+ * Renewable-siting section. Every part degrades on its own: a failed part is
+ * null and listed in `meta.unavailable` as `{section: "renewables.<part>"}`.
+ */
+export interface EnergyRenewables {
+  grid: EnergyRenewablesGrid | null;
+  projects: EnergyRenewablesProjects | null;
+  /** Up to one cell per technology (solar, wind) within 12 km. */
+  nrel: EnergyNrelCell[] | null;
+  lesser_prairie_chicken: EnergyLesserPrairieChicken | null;
+  aviation: EnergyRenewablesAviation | null;
+  blm: EnergyRenewablesBlm | null;
+  obstacles: EnergyObstacles | null;
+  whooping_crane: EnergyWhoopingCrane | null;
+  /** Also null when the section has no state/county to match on. */
+  interconnection_queue: EnergyInterconnectionQueue | null;
+  [key: string]: unknown;
+}
+
 /** Per-section counts. A null count means that section was not fetched. */
 export interface EnergySummary {
   wells_in_section: number | null;
@@ -354,6 +675,10 @@ export interface EnergySummary {
   orphaned_wells: number | null;
   pipelines_within_radius: number | null;
   fracfocus_disclosures: number | null;
+  /** From `renewables.grid`; null when not fetched or nothing within range. */
+  nearest_transmission_100kv_plus_miles: number | null;
+  /** From `renewables.grid`; null when not fetched or nothing within range. */
+  nearest_substation_230kv_plus_miles: number | null;
   [key: string]: unknown;
 }
 
@@ -392,6 +717,7 @@ export interface EnergyReport {
   pipelines?: { radius_mi: number } & SectionEnvelope<EnergyPipelineRow>;
   fracfocus?: { radius_mi: number } & SectionEnvelope<FracFocusRow>;
   constraints?: EnergyConstraints | null;
+  renewables?: EnergyRenewables | null;
   meta: ReportMeta;
   [key: string]: unknown;
 }

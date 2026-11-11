@@ -192,7 +192,9 @@ const ENERGY_REPORT_RESPONSE: EnergyReport = {
     federal_leases: 1,
     orphaned_wells: 0,
     pipelines_within_radius: 1,
-    fracfocus_disclosures: 1
+    fracfocus_disclosures: 1,
+    nearest_transmission_100kv_plus_miles: null,
+    nearest_substation_230kv_plus_miles: null
   },
   wells: {
     in_section: {
@@ -315,6 +317,159 @@ const ENERGY_REPORT_RESPONSE: EnergyReport = {
   meta: {
     unavailable: [],
     sources: { wells: { name: "State regulators (CO ECMC, ND DMR, OK OCC, WY WOGCC, NM OCD)", as_of: null } }
+  }
+};
+
+const NEAREST_LINE = {
+  volt_class: "220-287",
+  voltage_kv: 230,
+  owner: { name: "EXAMPLE TRANSMISSION CO" },
+  status: "IN SERVICE",
+  distance_miles: 1.84,
+  crosses_section: false
+};
+
+const SUBSTATION_230 = {
+  name: "EXAMPLE SUB",
+  max_voltage_kv: 230,
+  max_volt_class: "220-287",
+  line_count: 3,
+  distance_miles: 3.1,
+  inferred: true as const
+};
+
+const ENERGY_RENEWABLES_RESPONSE: EnergyReport = {
+  legal_location: "25 24N 1E 6th Meridian",
+  resolved_legal_location: "25 24N 1E 6th Meridian",
+  alternate_legal_location: "25 T24N R1E 6th PM",
+  unit: "First Division",
+  state: "Colorado",
+  state_code: "CO",
+  county: "Weld",
+  parcel: { centroid: { lng: -104.01924, lat: 41.077932 }, geometry: null },
+  summary: {
+    wells_in_section: null,
+    wells_nearby: null,
+    operators_nearby: null,
+    federal_leases: null,
+    orphaned_wells: null,
+    pipelines_within_radius: null,
+    fracfocus_disclosures: null,
+    nearest_transmission_100kv_plus_miles: 1.84,
+    nearest_substation_230kv_plus_miles: 3.1
+  },
+  renewables: {
+    grid: {
+      radius_mi: 25,
+      transmission_by_class: [NEAREST_LINE],
+      nearest_line_100kv_plus: NEAREST_LINE,
+      substations: [SUBSTATION_230],
+      nearest_substation_230kv_plus: SUBSTATION_230,
+      nearest_substation_345kv_plus: null
+    },
+    projects: {
+      radius_mi: 15,
+      totals_mw: { solar: { operating: 120.5, planned: 250 }, wind: { operating: 0, planned: 0 } },
+      plants: [
+        {
+          eia_plant_id: 65432,
+          name: "Example Solar",
+          operator: { name: "EXAMPLE SOLAR LLC" },
+          inventory: "planned",
+          group: "solar",
+          technologies: ["Solar Photovoltaic", "Batteries"],
+          capacity_mw: 250,
+          capacity_mw_by_group: { solar: 200, storage: 50 },
+          online_year: 2027,
+          status: "(V) Under construction, more than 50 percent complete",
+          distance_miles: 4.2
+        }
+      ],
+      pv_footprints: [
+        {
+          uspvdb_case_id: 401234,
+          eia_plant_id: 60001,
+          name: "Example PV",
+          capacity_ac_mw: 120.5,
+          online_year: 2019,
+          on_section: false,
+          distance_miles: 2.7
+        }
+      ],
+      wind_turbines: { within_2mi: 0, within_5mi: 4, projects_within_5mi: ["Example Wind"] }
+    },
+    nrel: [
+      {
+        technology: "solar",
+        sc_point_gid: 123456,
+        resource: 5.12,
+        resource_unit: "kWh/m2/day (GHI)",
+        capacity_factor_pct: 27.4,
+        lcoe_all_in_usd_per_mwh: 41.3,
+        lcoe_site_usd_per_mwh: 33.9,
+        lcoe_percentile: 22,
+        capacity_ac_mw: 412,
+        dist_spur_miles: 3.4,
+        dist_reinforcement_miles: 12.8,
+        cell_distance_miles: 2.05
+      }
+    ],
+    lesser_prairie_chicken: {
+      in_occupied_range: false,
+      ecoregion: null,
+      top_category: null,
+      categories: [],
+      status_note: "Range-wide plan habitat (WAFWA CHAT). Not ESA critical habitat."
+    },
+    aviation: {
+      military_training_routes: [
+        {
+          ident: "IR111",
+          floor: { value_ft: 0, reference: "SFC", label: "Surface" },
+          ceiling: { value_ft: 1500, reference: "AGL", label: "1,500 FT AGL" },
+          inside_corridor: true,
+          centerline_distance_miles: 0.8
+        }
+      ],
+      special_use_airspace: []
+    },
+    blm: null,
+    obstacles: {
+      radius_mi: 2,
+      total: 3,
+      at_least_200ft_agl: 1,
+      on_section: 0,
+      by_group: { tower: 2, transmission_tower: 1 },
+      tallest: { type: "TOWER", agl_ft: 310, distance_miles: 1.2, faa_study: "2019-ANM-1234-OE" },
+      nearest_met_tower_miles: null
+    },
+    whooping_crane: { band_pct: null, note: "USGS whooping crane migration corridor." },
+    interconnection_queue: {
+      scope: "county",
+      county: "Weld",
+      state_code: "CO",
+      vintage: "2024",
+      active_requests: 2,
+      active_mw_by_type: { Solar: 300, Battery: 100 },
+      withdrawn_requests: 5,
+      operational_requests: 1,
+      active_projects: [
+        {
+          name: "Example Solar",
+          type: "Solar",
+          mw: 300,
+          point_of_interconnection: "Example Sub 230kV",
+          ia_phase: "Facility Study",
+          proposed_year: 2028,
+          developer: null,
+          transmission_provider: "PSCo"
+        }
+      ]
+    }
+  },
+  meta: {
+    unavailable: [{ section: "renewables.blm", reason: "source_error" }],
+    sources: { renewables: { name: "ORNL/HIFLD transmission lines, EIA-860M, NREL 2024 supply curves (CC-BY 4.0)", as_of: null } }
   }
 };
 
@@ -879,6 +1034,54 @@ describe("TownshipClient", () => {
 
       const [url] = fetchMock.mock.calls[0];
       expect(url).toContain("include=wells%2Cpipelines%2Cgeometry");
+    });
+
+    it("passes include=renewables", async () => {
+      const fetchMock = mockFetch(ENERGY_RENEWABLES_RESPONSE);
+      vi.stubGlobal("fetch", fetchMock);
+
+      await client.energyReport("25 24N 1E 6th Meridian", { include: ["renewables"] });
+
+      const [url] = fetchMock.mock.calls[0];
+      expect(url).toContain("/energy/report?");
+      expect(url).toContain("include=renewables");
+    });
+
+    it("parses the renewables section and the new summary fields", async () => {
+      vi.stubGlobal("fetch", mockFetch(ENERGY_RENEWABLES_RESPONSE));
+
+      const report = await client.energyReport("25 24N 1E 6th Meridian", {
+        include: ["renewables"]
+      });
+      const r = report.renewables;
+
+      expect(report.summary.nearest_transmission_100kv_plus_miles).toBe(1.84);
+      expect(report.summary.nearest_substation_230kv_plus_miles).toBe(3.1);
+      expect(r?.grid?.nearest_line_100kv_plus?.owner?.name).toBe("EXAMPLE TRANSMISSION CO");
+      expect(r?.grid?.nearest_substation_230kv_plus?.inferred).toBe(true);
+      expect(r?.grid?.nearest_substation_345kv_plus).toBeNull();
+      expect(r?.projects?.plants[0]?.capacity_mw_by_group.storage).toBe(50);
+      expect(r?.projects?.totals_mw.solar?.planned).toBe(250);
+      expect(r?.nrel?.[0]?.lcoe_percentile).toBe(22);
+      expect(r?.aviation?.military_training_routes[0]?.floor?.reference).toBe("SFC");
+      expect(r?.obstacles?.tallest?.agl_ft).toBe(310);
+      expect(r?.whooping_crane?.band_pct).toBeNull();
+      expect(r?.interconnection_queue?.scope).toBe("county");
+      expect(r?.interconnection_queue?.active_projects[0]?.developer).toBeNull();
+    });
+
+    it("keeps a failed renewables part as null and lists it in meta.unavailable", async () => {
+      vi.stubGlobal("fetch", mockFetch(ENERGY_RENEWABLES_RESPONSE));
+
+      const report = await client.energyReport("25 24N 1E 6th Meridian", {
+        include: ["renewables"]
+      });
+
+      expect(report.renewables?.blm).toBeNull();
+      expect(report.renewables?.grid).not.toBeNull();
+      expect(report.meta.unavailable).toEqual([
+        { section: "renewables.blm", reason: "source_error" }
+      ]);
     });
   });
 

@@ -360,7 +360,9 @@ export class TownshipClient {
   /**
    * Get the energy parcel report for a PLSS section. Covers state-regulator
    * wells, operators, federal leases, county royalties, orphaned wells,
-   * pipelines, FracFocus disclosures, and development constraints.
+   * pipelines, FracFocus disclosures, development constraints, and
+   * renewable siting (grid proximity, generators, NREL supply curve,
+   * wildlife, aviation, BLM designations, obstacles, interconnection queue).
    *
    * @param legalLocation - A PLSS legal description, e.g. "NW 25 24N 1E 6th Meridian"
    * @param options - Optional section projection (`include`)
@@ -376,6 +378,12 @@ export class TownshipClient {
    * const slim = await client.energyReport('25 24N 1E 6th Meridian', {
    *   include: ['wells', 'pipelines']
    * })
+   *
+   * // Renewable siting only
+   * const siting = await client.energyReport('25 24N 1E 6th Meridian', {
+   *   include: ['renewables']
+   * })
+   * console.log(siting.renewables?.grid?.nearest_line_100kv_plus?.distance_miles)
    * ```
    */
   async energyReport(legalLocation: string, options?: EnergyReportOptions): Promise<EnergyReport> {

@@ -198,7 +198,7 @@ const fc = await client.raw("NW 25 24N 1E 6th Meridian");
 
 Energy parcel report for a PLSS section — state-regulator wells, operators,
 BLM federal leases, ONRR county royalties, orphaned wells, pipelines,
-FracFocus disclosures, and development constraints.
+FracFocus disclosures, development constraints, and renewable siting.
 
 ```typescript
 const report = await client.energyReport("25 24N 1E 6th Meridian");
@@ -217,11 +217,45 @@ const withGeometry = await client.energyReport("25 24N 1E 6th Meridian", {
 ```
 
 **Options:** `include` — any of `wells`, `operators`, `leases`, `royalties`,
-`orphaned_wells`, `pipelines`, `fracfocus`, `constraints`, `geometry`.
+`orphaned_wells`, `pipelines`, `fracfocus`, `constraints`, `renewables`,
+`geometry`.
 
 **Returns:** `EnergyReport`. Array sections are
 `{total, returned, truncated, more, rows}` envelopes; a failed section lands
 in `meta.unavailable` instead of failing the report.
+
+#### Renewable siting (`include: ["renewables"]`)
+
+```typescript
+const siting = await client.energyReport("25 24N 1E 6th Meridian", {
+  include: ["renewables"]
+});
+const r = siting.renewables;
+console.log(siting.summary.nearest_transmission_100kv_plus_miles);
+console.log(r?.grid?.nearest_substation_230kv_plus?.distance_miles);
+console.log(r?.nrel?.find((c) => c.technology === "solar")?.lcoe_all_in_usd_per_mwh);
+console.log(r?.interconnection_queue?.active_requests);
+
+// Each part fails on its own: it is null and listed in meta.unavailable
+const failed = siting.meta.unavailable.filter((u) => u.section.startsWith("renewables."));
+```
+
+`renewables` has nine parts — `grid`, `projects`, `nrel`,
+`lesser_prairie_chicken`, `aviation`, `blm`, `obstacles`, `whooping_crane`,
+`interconnection_queue` — and any of them may be `null` (a failed part is
+listed in `meta.unavailable` as `{section: "renewables.<part>", reason}`).
+`summary` gains `nearest_transmission_100kv_plus_miles` and
+`nearest_substation_230kv_plus_miles`.
+
+- Substations are **inferred** from ORNL/HIFLD transmission-line endpoints
+  (no open federal substation layer exists); every substation row carries
+  `inferred: true`.
+- NREL supply-curve values describe the surrounding 11.5 km cell, not the
+  section itself. NREL (`nrel`) and LBNL Queued Up (`interconnection_queue`)
+  values are licensed CC-BY 4.0; attribute them when you redistribute.
+- The interconnection queue is county-level (`scope: "county"`).
+- Lesser prairie-chicken habitat is the WAFWA range-wide plan, not ESA
+  critical habitat.
 
 ---
 
@@ -363,6 +397,17 @@ try {
   }
 }
 ```
+
+## Unreleased
+
+- `energyReport` accepts `include: ["renewables"]` and types the new
+  `renewables` section (`EnergyRenewables` and its part types: grid
+  proximity with inferred substations, EIA-860M generators, USPVDB
+  footprints, USGS turbines, NREL 2024 supply-curve cells, lesser
+  prairie-chicken habitat, FAA aviation and obstacles, BLM designations
+  and ROW cases, whooping crane corridor, LBNL interconnection queue).
+- `EnergySummary` gains `nearest_transmission_100kv_plus_miles` and
+  `nearest_substation_230kv_plus_miles`.
 
 ## What's new in v2.0.0
 
