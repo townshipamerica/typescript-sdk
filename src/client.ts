@@ -82,7 +82,7 @@ export class TownshipClient {
         ...init,
         headers: {
           "X-API-Key": this.apiKey,
-          "User-Agent": "townshipamerica-js/2.0.0",
+          "User-Agent": "townshipamerica-js/2.1.0",
           ...(init?.headers ?? {})
         },
         signal: controller.signal
