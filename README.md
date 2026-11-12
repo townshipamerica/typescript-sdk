@@ -398,7 +398,7 @@ try {
 }
 ```
 
-## Unreleased
+## What's new in v2.1.0
 
 - `energyReport` accepts `include: ["renewables"]` and types the new
   `renewables` section (`EnergyRenewables` and its part types: grid
